@@ -17,19 +17,54 @@ We provide two files and one folders:
 < Chapter 2 >
 CPR.py provides one class and one function.
 1. class CPR:
-	__init__(self, dampingFactor=0.7, n_biomarkers=70, n_clusters=2, n_pc=2, t_degree=0.02)
+	__init__(self,
+			dampingFactor=0.7,
+			n_biomarkers=70,
+			n_clusters=2,
+			n_pc=2,
+			t_degree=0.02)
 	
-	setParam(self, dampingFactor=None, n_biomarkers=None, n_clusters=None, n_pc=None, t_degree=None)
-	
+	setParam(self,
+			dampingFactor=None,
+			n_biomarkers=None,
+			n_clusters=None,
+			n_pc=None,
+			t_degree=None)
+		If user want to set parameters, please see chapter 3.
+		
 	getParam(self)
+		This function only prints the parameters used in model,
+		so it doesn't have a return value.
 	
 	fit(self, geneList, edgeList, data_train, label_train, randomState=None)
+		This function make a model to fit.
+		- geneList : list() for genes
+			ex) [gene1, gene2, ...]
+		- data_test : 2dim np.array() whose columns represent poor prognosis samples for test
+			and rows represent genes ordered in the order on the geneList
+		- label_test : 1dim np.array() for labels of samples
+			The order of samples must be mapped with elemenes in data_test
+		- randomState: This parameter is used for scikit-learn functinos
+			Default value is set as None.
 	
 	etimate(self, geneList, data_test, label_test, randomState=None)
-	
+		This function returns only one estimator, the area under ROC curve (AUC).
+		- geneList : list() for genes
+			ex) [gene1, gene2, ...]
+		- data_test : 2dim np.array() whose columns represent poor prognosis samples for test
+			and rows represent genes ordered in the order on the geneList
+		- label_test : 1dim np.array() for labels of samples
+			The order of samples must be mapped with elemenes in data_test
+		- randomState: This parameter is used for scikit-learn functinos
+			Default value is set as None.
+		
 	print_rankedGenes(self, n_genes=None)
+		This function only prints the prioritized genes in the fitted model,
+		so it doesn't have a return value.
 	
 	print_biomarkers(self, n_genes=None)
+		This function only prints the biomarkers in the fitted model,
+		so it doesn't have a return value.
 	
 2. load_data():
 	This function provide datasets that are used in our paper.

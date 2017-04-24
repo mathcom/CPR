@@ -207,12 +207,6 @@ class CPR:
 		else:
 			degreecut = degreeList[ int(n_genes * t_degree) ]
 		
-		print("n_genes: %d" % n_genes)
-		print("n_edegs: %d" % n_edges)
-		print("degDist[0] = %d" % degreeList[0])
-		print("degreecut = degDist[%d] = %d" % (int(n_genes * t_degree), degreecut))
-	
-		
 		"""3. K Means clustering"""
 		clusters = list()
 		if n_clusters > 1:
