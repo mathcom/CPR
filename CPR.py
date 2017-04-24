@@ -225,7 +225,6 @@ class CPR:
 				clusters.append(dict())
 				clusters[i]["label_train"] = label_train[cluster_train == i]
 				clusters[i]["data_train"]  = data_train[cluster_train == i]
-				print("cluster[%d] = %d" % (i,len(clusters[i]["data_train"])))
 				
 			# 3.4) If some cluster has only one label, then raise cluster error
 			for i in range(n_clusters):
