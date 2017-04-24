@@ -60,49 +60,31 @@ class CPR:
 	
 	""" get paramters """
 	def getParam(self):
-		print("dampingFactor:", self.dampingFactor)
-		print("n_biomarkers :", self.n_biomarkers)
-		print("n_clusters   :", self.n_clusters)
-		print("n_pc         :", self.n_pc)
-		print("t_degree     :", self.t_degree)
+		parameters = dict()
+		parameters['dampingFactor'] = self.dampingFactor
+		parameters['n_biomarkers'] = self.n_biomarkers
+		parameters['n_clusters'] = self.n_clusters
+		parameters['n_pc'] = self.n_pc
+		parameters['t_degree'] = self.t_degree
+		return parameters
 	
-	""" print average-ranked genes """
-	def print_rankedGenes(self, n_genes=None):
-		total_genes = len(self.rankedGenes)
+	""" get average-ranked genes """
+	def getRankedGenes(self):
+		if self.isFitted:
+			return self.rankedGenes
+		else:
+			print("Fitting Error: Please getRankedGenes after fitting with training data")
+			exit(1)
 		
-		if n_genes == None:
-			print("=== average-ranked genes (All %d) ===" % total_genes)
-			for geneName in self.rankedGenes:
-				print(geneName)
-		elif type(n_genes) == int:
-			if n_genes < total_genes:
-				print("=== average-ranked genes (top %d) ===" % n_genes)
-				for geneName in self.rankedGenes[:n_genes]:
-					print(geneName)
-			else:
-				print("=== average-ranked genes (All %d) ===" % total_genes)
-				for geneName in self.rankedGenes:
-					print(geneName)
-		
-	""" print biomarkers """
-	def print_biomarkers(self, n_genes=None):
-		total_genes = len(self.biomarkers)
-		
-		if n_genes == None:
-			print("=== biomarkers (All %d) ===" % total_genes)
-			for geneName in self.biomarkers:
-				print(geneName)
-		elif type(n_genes) == int:
-			if n_genes < total_genes:
-				print("=== biomarkers (top %d) ===" % n_genes)
-				for geneName in self.biomarkers[:n_genes]:
-					print(geneName)
-			else:
-				print("=== biomarkers (All %d) ===" % total_genes)
-				for geneName in self.biomarkers:
-					print(geneName)
+	""" get biomarkers """
+	def getBiomarkers(self):
+		if self.isFitted:
+			return self.biomarkers
+		else:
+			print("Fitting Error: Please getRankedGenes after fitting with training data")
+			exit(1)
 	
-	""" estimate
+	""" validate
 	geneList : list() for genes
 		ex) [gene1, gene2, ...]
 		
@@ -115,9 +97,9 @@ class CPR:
 	randomState: This parameter is used for scikit-learn functinos
 		Default value is set as None.
 	"""
-	def estimate(self, geneList, data_test, label_test, randomState=None):
+	def validate(self, geneList, data_test, label_test, randomState=None):
 		if not self.isFitted:
-			print("Fitting Error: Please estimate after fitting with training data")
+			print("Fitting Error: Please validate after fitting with training data")
 			exit(1)
 			
 		# basic number parameters

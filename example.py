@@ -1,48 +1,59 @@
 from __future__ import print_function
-import CPR
+from CPR import load_data
+example = load_data()
 
-if __name__=="__main__":
-	""" 1. How to load data """
-	# A return value of load_data() is 'dictionary'.
-	# User can check keys using '.keys()'
-	examples = CPR.load_data()
-	# print(examples.keys())
-	
-	edgeList = examples['edgeList']
-	geneList = examples['geneList']
-	data_train = examples['data_BRCA']
-	label_train = examples['label_BRCA']
-	data_test = examples['data_GSE4922']
-	label_test = examples['label_GSE4922']
-	
-	""" 2. How to fit classification """
-	# If user does not give parameter, the instance is initialized with default values.
-	# The default values are described in 'README'.
-	cpr = CPR.CPR()
-	
-	# User can chage parameters. Detail information is written in 'README'.
-	cpr.setParam(dampingFactor=0.5, n_biomarkers=70)
-	
-	# To fit model, user must provide 4 data.
-	cpr.fit(geneList, edgeList, data_train, label_train, randomState=1)
-	
-	""" 3. How to use the fitted model """
-	# The fitted model provides only one measure, the area of under curve (AUC).
-	auc = cpr.estimate(geneList, data_test, label_test, randomState=1)
-	print("AUC = %g" % auc)
-	
-	""" 4. How to get information for model """
-	# prints parameters of a model.
-	cpr.getParam()
-	
-	# prints prioritized genes.
-	# If user does not give any parameter, then all genes are printed.
-	cpr.print_rankedGenes(5)
-	
-	# prints biomarkers.
-	# If user does not give any parameter, then all biomarkers are printed.
-	cpr.print_biomarkers(5)
-	
-	# User can directly access to variables in class.
-	print("The number of biomarkers: %d" % len(cpr.biomarkers))
-	
+print(example.keys())
+""" result
+>>> ['geneList', 'edgeList', 'data_BRCA', 'label_BRCA',
+'data_GSE4922', 'label_GSE4922', 'data_GSE7390', 'label_GSE7390']
+"""
+
+geneList = example['geneList']
+edgeList = example['edgeList']
+data_train = example['data_BRCA']
+label_train = example['label_BRCA']
+data_test = example['data_GSE4922']
+label_test = example['label_GSE4922']
+
+
+from CPR import CPR
+
+# construct with default values
+cpr = CPR()
+
+# set paramters
+cpr.setParam(dampingFactor=0.5)
+
+# fit with BRCA dataset
+cpr.fit(geneList, edgeList, data_train, label_train, randomState=1)
+
+# validate with GSE4922 dataset
+AUC = cpr.validate(geneList, data_test, label_test, randomState=1)
+
+
+# print accuracy
+print("the area under curve=%g" % AUC)
+""" result
+>>> the area under curve=0.654135
+"""
+
+# print the top 10 genes
+rankedGenes = cpr.getRankedGenes()
+print(rankedGenes[:10])
+""" result
+>>> the area under curve=0.654135
+"""
+
+# print the top 5 biomarkers
+biomarkers = cpr.getBiomarkers()
+print(biomarkers[:5])
+""" result
+>>> the area under curve=0.654135
+"""
+
+# get the parameter used in model
+parameters = cpr.getParam()
+print(parameters)
+""" result
+>>> the area under curve=0.654135
+"""
