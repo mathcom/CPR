@@ -1,7 +1,6 @@
 """ information
-
 170419: This code is written by Jonghwan Choi
-
+170424: Updated with README
 """
 
 from __future__ import print_function

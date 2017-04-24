@@ -61,10 +61,14 @@ CPR.py provides one class and one function.
 	print_rankedGenes(self, n_genes=None)
 		This function only prints the prioritized genes in the fitted model,
 		so it doesn't have a return value.
+		- n_genes : If user give an integer k, then the function prints the top k genes.
+			If does not specifiy, all genes print in the order of ranking.
 	
 	print_biomarkers(self, n_genes=None)
 		This function only prints the biomarkers in the fitted model,
 		so it doesn't have a return value.
+		- n_genes : If user give an integer k, then the function prints the top k genes.
+			If does not specifiy, all biomarkers print in the order of ranking.
 	
 2. load_data():
 	This function provide datasets that are used in our paper.
