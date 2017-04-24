@@ -3,8 +3,11 @@
 170419: This code is written by Jonghwan Choi
 
 """
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> origin/master
 from __future__ import print_function
 import numpy as np
 import pickle
