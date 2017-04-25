@@ -1,0 +1,49 @@
+CPR is a program to identify prognostic genes (biomarkers) and use them to predict prognosis of cancer patients.
+
+Please refer to included 'manual.pdf'.
+
+For more detail, please refer to "Improved prediction for breast cancer outcome by identifying heterogeneous biomarkers" (under review)
+
+Latest update: 04/25/2017
+
+----------------------------------------------------------------------------------------------------------------------------------------
+USAGE: 
+
+	python CPR.py -g NETWORK_FILE -r TRAINING_FILE [-e TEST_FILE] [-o RESULT_FILE] [optional parameters]
+
+----------------------------------------------------------------------------------------------------------------------------------------
+example:
+
+	$ python CPR.py -g ex_NETWORK.txt -r ex_TRAINIG.txt -e ex_TEST.txt
+	>>> Now loading data...
+	>>> Constructing model
+	>>> Fitting the model...
+	>>> Now validating classification...
+	>>> Summary
+
+	=====  RESULT  =================
+	Accuracy(=AUC): 0.677
+
+	=====  Biomarkers (70)  ========
+	ZNF681  RAC2    ZNF672  ARRB1   GNAI1   AURKB   EGFR    STAT5A  PTPN11  PIK3CA
+	RNPS1   CDK1    ZNF253  ZNF257  E2F1    UPF3B   SOS1    ITGB1   ZNF431  HSP90AA1
+	EED     CBL     HDAC3   TAF1    UBE2I   ZNF879  ZNF718  ACTG1   ZNF25   PPP1CC
+	BRCA1   SPI1    ZNF473  GNA11   CREBBP  RBM8A   RPS27   ZNF273  ZNF35   PLK1
+	POLR2L  ZNF626  ZNF430  POLR2J  POLR2I  YWHAG   ZNF92   GSK3B   TP53    ZNF572
+	CALM1   ZNF501  ZNF829  STAT3   POLR2C  HRAS    RAD21   ZNF519  LCK     FOS
+	GNAL    UBC     JUN     PRKACG  MAPK14  ZNF429  POLR2B  GNGT1   POLR2D  MAGOH
+
+	=====  Subnetwork (499)  ========
+	PTPN11  STAT3
+	JUN     POLR2D
+	LCK     STAT5A
+	HSP90AA1        PLK1
+	POLR2D  POLR2I
+	ZNF429  ZNF626
+	CALM1   EGFR
+	...
+	
+	>>> Finish
+	$
+
+----------------------------------------------------------------------------------------------------------------------------------------
