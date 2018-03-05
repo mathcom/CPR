@@ -2,46 +2,46 @@ CPR is a program to identify prognostic genes (biomarkers) and use them to predi
 
 Please refer to included 'manual.pdf'.
 
-For more detail, please refer to "Improved prediction for breast cancer outcome by identifying heterogeneous biomarkers" (under review)
+For more detail, please refer to Choi, Jonghwan, et al. "Improved prediction of breast cancer outcome by identifying heterogeneous biomarkers." Bioinformatics 33.22 (2017): 3619-3626.
 
-Latest update: 04/25/2017
+Latest update: 04 March 2017
 
--------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------
 USAGE: 
 
-	python CPR.py -g NETWORK_FILE -r TRAINING_FILE [-e TEST_FILE] [-o RESULT_FILE] [optional parameters]
+	python CPR.py EXPRESSION_FILE NETWORK_FILE CLINICAL_FILE RESULT_FILE [optional parameters]
 
--------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------
 example:
 
-	$ python CPR.py -g ex_NETWORK.txt -r ex_TRAINIG.txt -e ex_TEST.txt
-	>>> Now loading data...
-	>>> Constructing model
-	>>> Fitting the model...
-	>>> Now validating classification...
-	>>> Summary
-
-	=====  RESULT  =================
-	Accuracy(=AUC): 0.793
-
-	=====  Biomarkers (70)  ========
-	EGFR    GNAI3   CCNB1   H3F3A   GNA11   BRCA1   PLK1    EED     ARRB1   DYNLL1
-	NRAS    GNAI1   E2F1    UBE2I   STAT5B  LCK     TBP     AR      YWHAE   EGR1
-	PXN     AURKB   GNG12   TAF1    RNPS1   POLR2J  PPP2R1A STAT3   PTK2B   PIK3R2
-	HRAS    PIK3R3  PSMA1   PIK3CA  SUZ12   HDAC3   PIK3CD  ACTB    GNG7    RAC3
-	RBX1    HSPA8   MAPK11  TNF     SMC1A   RANBP2  PPP1CC  UPF3B   CREBBP  SP1
-	PSMC2   POLR2H  POLR2G  CDH1    CDC42   TFAP2A  POLR2D  PTK2    TCF7L2  RPA1
-	ITGB3   RPA2    CALM1   RHOA    GNAO1   JAK1    HDAC1   XPO1    GNAI2   POLR2I
-
-	=====  Subnetwork (518)  ========
-	GNAI2   PIK3R2
-	EED     H3F3A
-	GNAI2   LCK
-	PIK3CA  PIK3R3
-	ITGB3   PTK2B
-	...
-	
-	>>> Finish
+	$ python CPR.py ex_EXPRESSION.txt ex_NETWORK.txt ex_CLINICAL ex_RESULT
+	>>> 0. Arguments
+	Namespace(CLINICAL_FILE='ex_CLINICAL.txt', EXPRESSION_FILE='ex_EXPRESSION.txt', NETWORK_FILE='ex_NETWORK.txt', RESULT_FILE='ex_RESULT', conditionHubgene=0.02, dampingFactor=0.7, numBiomarkers=70, numClusters=0)
+	>>> 1. Load data
+	>>> 2. Preprocess data
+		n_samples: 189
+		n_genes  : 8819
+		n_edges  : 150168
+	>>> 3. Conduct CPR
+		K-means clustering
+		-> n_clusters: 3
+			In cluster[0], n_samples:76, n_goods:44, n_poors:32
+			In cluster[1], n_samples:107, n_goods:52, n_poors:55
+			In cluster[2], n_samples:6, n_goods:3, n_poors:3
+		Modified PageRank
+	>>> 4. 10-fold Cross validation
+		10% complete!
+		20% complete!
+		30% complete!
+		40% complete!
+		50% complete!
+		60% complete!
+		70% complete!
+		80% complete!
+		90% complete!
+		100% complete!
+		AUC-ROC : 0.710
+		Accuracy: 0.640
 	$
 
--------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------

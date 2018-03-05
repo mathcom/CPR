@@ -1,554 +1,498 @@
-from __future__ import print_function
+'''
+2018.03.03
+1. Remove the dependency of the sys and pickle module.
+2. Change the procedure for parsing arguments using the argparse module.
+3. Change the procedure for loading data
+
+'''
+import argparse
 import numpy as np
-import pickle
-import sys
 from copy import deepcopy
-from math import sqrt
+from math import sqrt, floor
 from operator import itemgetter
-from scipy import interp
+from scipy.stats import rankdata
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import auc, roc_curve, silhouette_score
+from sklearn.metrics import auc, roc_curve, silhouette_score, accuracy_score
 from sklearn.model_selection import StratifiedKFold
 
-from CPR_preprocessing import *
-from CPR_util import *
+def main():
+	'''
+	args={'EXPRESSION_FILE', 'NETWORK_FILE', 'CLINICAL_FILE', 'RESULT_FILE',
+		  'dampingFactor', 'numBiomarkers', 'numClusters', 'cutoffDegree'}
+	'''
+	args = parse_arguments()
+	
+	
+	######## 1. Load data
+	print('>>> 1. Load data')
+	'''
+	network={'edge':edgeList,
+	         'gene':geneset}
+	data={'expr':exprArr,
+	      'gene':geneList,
+		  'sample':sampleList}
+	clinicial: a dictionary whose key and value is 'sampleName' and its label, respectively.
+	'''
+	data     = load_data(args.EXPRESSION_FILE)
+	network  = load_network(args.NETWORK_FILE)
+	clinical = load_clinical(args.CLINICAL_FILE)
+	
+	
+	######## 2. Restrict data with the intersection of gene sets
+	print('>>> 2. Preprocess data')
+	'''
+	NOTE: A given network and data can have different gene sets.
+	      Find the common set, and restrict network and data.
+	'''
+	commonGeneList = find_commonGeneList(network['gene'],data['gene'])
+	network        = restrict_network(network,commonGeneList)
+	data           = restrict_data(data,commonGeneList)
+	'''
+	data information
+	'''
+	n_samples, n_genes = data['expr'].shape
+	n_edges            = len(network['edge'])
+	print('    n_samples: %d' % n_samples)
+	print('    n_genes  : %d' % n_genes)
+	print('    n_edges  : %d' % n_edges)
+	
+	
+	######## 3. Make input for gene selection procedure
+	labels = map_labels(clinical,data['sample'])
 
-def main(argc, argv):
-	networkFile = ""
-	exprFile_tr = ""
-	exprFile_te = ""
-	resultFile = ""
-	dampingFactor = 0.7   #default
-	n_biomarkers  = 70    #default
-	isValidateGiven = False
-	isResultFileGiven = False
 	
-	if "-g" not in argv or "-r" not in argv:
-		print("")
-		print("usage: python CPR.py -g GENE_NETWORK_FILE -r GENE_EXPRESSION_FILE_FOR_TRAIN [-e GENE_EXPRESSION_FILE_FOR_TEST] [-o RESULT_FILE] [optional parameters]")
-		print("")
-		print("< Required inputs >")
-		print("-g  GENE_NETWORK_FILE : Gene interactions")
-		print("        Tab-delimited file with one header 'gene1\tgene2'")
-		print("-r  GENE_EXPRESSION_FILE_TRAIN : Gene expressions dataset for training")
-		print("        Tab-delimited file with three headers 'PATIENT', 'OSEVENT' and 'OSDURATION'")
-		print("        For detail annotation, please see manual.pdf")
-		print("")
-		print("< Optional inputs >")
-		print("-e  GENE_EXPRESSION_FILE_TEST : Gene expressions dataset to test")
-		print("        Tab-delimited file with three headers 'PATIENT', 'OSEVENT' and 'OSDURATION'")
-		print("        If test dataset is given, the fitted model is validated with test dataset")
-		print("        If not given, the fitted model is validated with training dataset")
-		print("-o  RESULT_FILE : A summary of results are written in the file")
-		print("        If RESULT_FILENAME is not given, all results are showed in command lines")
-		print("        The summary have 1) accuracy, 2) biomarkers, and 3) subnetwork with biomarkers")
-		print("")
-		print("< Optional parameters >")
-		print("-d  dampingFactor : float, default = 0.7")
-		print("        This parameter decides an influence of network information on prediction")
-		print("        The value must be between 0.0 and 1.0")
-		print("-n  n_biomarkers : int, default = 70")
-		print("        This parameter decides number of biomarkers to use in prediction")
-		print("")
-		exit(1)
-	else:
-		for i in range(1,argc,2):
-			flag = argv[i]
-			value = argv[i+1]
-			
-			if flag == "-g":
-				networkFile = value
-			elif flag == "-r":
-				exprFile_tr = value
-			elif flag == "-e":
-				exprFile_te = value
-				isValidateGiven = True
-			elif flag == "-o":
-				resultFile = value
-				isResultFileGiven = True
-			elif flag == "-d":
-				dampingFactor = float(value)
-			elif flag == "-n":
-				n_biomarkers = int(value)
+	######## 3. Gene selection with 'Clustering and Modified PageRank (CPR)'
+	print('>>> 3. Conduct CPR')
+	cpr = CPR(dampingFactor=args.dampingFactor,
+			  n_biomarkers=args.numBiomarkers,
+			  n_clusters=args.numClusters,
+			  t_degree=args.cutoffDegree,
+			  logshow=True)
+	cpr.fit(expr=data['expr'],
+			labels=labels,
+			genes=data['gene'],
+			edges=network['edge'],
+			random_state=1)
+	biomarkers = cpr.get_biomarkers()
+	subnetwork = cpr.get_subnetwork()
 	
-	""" 1. Load data """
-	print(">>> Now loading data...")
-	edgeList, geneset_g = preprocessing_network(read_file(networkFile))
-	samples_tr, labels_tr, data_tr, geneList_tr = preprocessing_expression(read_file(exprFile_tr)) 
-	if isValidateGiven:
-		samples_te, labels_te, data_te, geneList_te = preprocessing_expression(read_file(exprFile_te))
-		
-	commonGenes = find_commonGenes([geneset_g, set(geneList_tr)])
+	######## 4. 10 fold Cross Validation
+	print('>>> 4. 10-fold Cross validation')	
+	mean_auc, mean_acc = compute_accuracy_via_crossvaldiation(data=data, labels=labels, network=network,
+															  K=10, random_state=1,
+															  dampingFactor=args.dampingFactor,
+															  n_biomarkers=args.numBiomarkers,
+															  n_clusters=args.numClusters,
+															  t_degree=args.cutoffDegree)
+	print('    AUC-ROC : %.3f' % mean_auc)
+	print('    Accuracy: %.3f' % mean_acc)
 	
-	edgeList = parsing_commonEdge(commonGenes, edgeList)
-	
-	data_tr, geneList_tr = parsing_commonExpr(commonGenes, data_tr, geneList_tr)
-	
-	""" 2. construct and fit model """
-	print(">>> Constructing model")
-	cpr = CPR()
-	cpr.setParam(dampingFactor=dampingFactor, n_biomarkers=n_biomarkers)
-	print(">>> Fitting the model...")
-	cpr.fit(geneList_tr, edgeList, data_tr, labels_tr, randomState=1)
-	
-	""" 3. validate model """
-	print(">>> Now validating classification...")
-	if isValidateGiven:
-		AUC = cpr.validate(geneList_te, data_te, labels_te, randomState=1)
-	else:
-		AUC = cpr.validate(geneList_tr, data_tr, labels_tr, randomState=1)
-	
-	""" 4. find subnetwork """
-	subEdgeList = find_subnetwork(cpr.getBiomarkers(), edgeList)
-	
-	""" 5. summary for result """
-	print(">>> Summary")
-	if isResultFileGiven:
-		fwrite_summary(resultFile, AUC, cpr.getBiomarkers(), subEdgeList)
-	else:
-		print_summary(AUC, cpr.getBiomarkers(), subEdgeList)
-	
-	print(">>> Finish")
-	
+	######### 5. Summary for results
+	with open(args.RESULT_FILE+'_biomarker.txt', 'w') as fout:
+		fout.write('GeneSymbol\tPRscore\n')
+		for elem in biomarkers:
+			fout.write('%s\t%.6f\n' % elem)
+	with open(args.RESULT_FILE+'_subnetwork.txt', 'w') as fout:
+		fout.write('source\ttarget\n')
+		for edge in subnetwork:
+			fout.write('%s\t%s\n' % edge)
+	with open(args.RESULT_FILE+'_accuracy.txt', 'w') as fout:
+		fout.write('AUC-ROC : %.3f\n' % mean_auc)
+		fout.write('Accuracy: %.3f\n' % mean_acc)	
 
 class CPR:
-	""" hyper-parameters """
-	dampingFactor = .0      # parameter of pageRank	
-	n_biomarkers  = 0
-	n_clusters    = 0       # the number of clusters in K-means clustering
-	n_pc          = 0       # the number of principal components in PCA
-	t_degree      = .0      # threshold of degree for selection of biomarkers
-	
-	""" constant parameters """
-	iterations    = 5
-	n_trees       = 100
-	
-	""" private variables """
-	biomarkers = list()
-	rankedGenes = list()
-	networks = list()
-	isFitted = False
-	
-	""" constructor """
 	def __init__(self,
 				 dampingFactor=0.7,
 				 n_biomarkers=70,
-				 n_clusters=2,
-				 n_pc=2,
-				 t_degree=0.02):
+				 n_clusters='AUTO',
+				 t_degree=0.02,
+				 logshow=False):
+		self.dampingFactor = dampingFactor
+		self.n_biomarkers  = n_biomarkers
+		self.n_clusters    = n_clusters
+		self.t_degree      = t_degree
+		self.logshow       = logshow
 		
-		self.dampingFactor = float(dampingFactor)
-		self.n_biomarkers  = int(n_biomarkers)
-		self.n_clusters    = int(n_clusters)
-		self.n_pc          = int(n_pc)
-		self.t_degree      = float(t_degree)
-	
-	""" set parameters """
-	def setParam(self, dampingFactor=None, n_biomarkers=None, n_clusters=None, n_pc=None, t_degree=None):
-		if dampingFactor != None: self.dampingFactor = float(dampingFactor)
-		if n_biomarkers != None: self.n_biomarkers = int(n_biomarkers)
-		if n_clusters != None: self.n_clusters = int(n_clusters)
-		if n_pc != None: self.n_pc = int(n_pc)
-		if t_degree != None: self.t_degree = float(t_degree)
-		self.isFitted = False
-	
-	""" get paramters """
-	def getParam(self):
-		parameters = dict()
-		parameters['dampingFactor'] = self.dampingFactor
-		parameters['n_biomarkers'] = self.n_biomarkers
-		parameters['n_clusters'] = self.n_clusters
-		parameters['n_pc'] = self.n_pc
-		parameters['t_degree'] = self.t_degree
-		return parameters
-	
-	""" get average-ranked genes """
-	def getRankedGenes(self):
-		if self.isFitted:
-			return self.rankedGenes
+	def get_subnetwork(self):
+		return self.subnetwork
+		
+	def get_biomarkers(self):
+		return self.biomarkers
+		
+	def fit(self, expr, labels, genes, edges, random_state=None):
+		#### Set parameters
+		n_samples, n_genes = expr.shape
+		
+		#### K-means clustering
+		if self.logshow:
+			print('    K-means clustering')
+		if self.n_clusters==1:
+			idx = np.zeros(n_samples, dtype=np.int32)
 		else:
-			print("Fitting Error: Please getRankedGenes after fitting with training data")
-			exit(1)
-		
-	""" get biomarkers """
-	def getBiomarkers(self):
-		if self.isFitted:
-			return self.biomarkers
-		else:
-			print("Fitting Error: Please getRankedGenes after fitting with training data")
-			exit(1)
-	
-	""" validate
-	geneList : list() for genes
-		ex) [gene1, gene2, ...]
-		
-	data_test : 2dim np.array() whose columns represent poor prognosis samples for test
-	    and rows represent genes ordered in the order on the geneList
-		
-	label_test : 1dim np.array() for labels of samples
-		The order of samples must be mapped with elemenes in data_test
-		
-	randomState: This parameter is used for scikit-learn functinos
-		Default value is set as None.
-	"""
-	def validate(self, geneList, data_test, label_test, randomState=None):
-		if not self.isFitted:
-			print("Fitting Error: Please validate after fitting with training data")
-			exit(1)
+			idx = self._conduct_sampleClustering(expr, random_state=random_state)
+		'''
+		cluster information
+		'''
+		if self.logshow:
+			print('    -> n_clusters: %d' % self.n_clusters)
+			for i in range(self.n_clusters):
+				n_samples = np.count_nonzero(idx==i)
+				n_goods   = np.count_nonzero(labels[idx==i]==0)
+				n_poors   = np.count_nonzero(labels[idx==i]==1)
+				print('        In cluster[%d], n_samples:%d, n_goods:%d, n_poors:%d' % (i, n_samples, n_goods, n_poors))
 			
-		# basic number parameters
-		n_genes = len(geneList)
-		n_samples = len(data_test)
-
-		# user parameters
-		n_trees     = self.n_trees
 		
-		# fitted information
-		biomarkers = self.biomarkers
+		#### Adjacency Matrix
+		adjMat = self._make_adjacencyMatrix(edges,genes)
 		
-		# 2.4) make gene indices
-		# geneToIndex: dict() for (key=geneName, value=index)
-		geneToIndex = self._makeGeneIndices(geneList)
-		idx_biomarkers = list()
-		for biomarker in biomarkers:
-			if geneToIndex.has_key(biomarker):
-				idx_biomarkers.append(geneToIndex[biomarker])
-				
-		mat_test = np.array(map(lambda line:line[idx_biomarkers], data_test))
+		#### Modified PageRank
+		if self.logshow:
+			print('    Modified PageRank')
+		geneScores = np.zeros(n_genes, dtype=np.float32)
+		for i in range(self.n_clusters):
+			tmp_expr   = expr[idx==i,:]
+			tmp_labels = labels[idx==i]
+			geneScores += self._conduct_modifiedPageRank(tmp_expr, tmp_labels, adjMat)
+		geneScores /= self.n_clusters
 		
-		# Spearman ranking
-		ranked_mat_test = self._ranking(mat_test, n_samples)
+		#### Degree in network
+		geneDegrees  = self._compute_geneDegree(adjMat)
+		degreeCutoff = self._find_degreeCutoff(geneDegrees)
 		
-		# cross validation
-		cv = StratifiedKFold(n_splits=10, random_state=randomState, shuffle=False)
-		clf = RandomForestClassifier(n_estimators=n_trees, random_state=randomState)
+		#### Sorting
+		geneList        = list(zip(genes,geneScores,geneDegrees))
+		geneList_sorted = sorted(geneList, key=itemgetter(1), reverse=True)
 		
-		mean_tpr = .0
+		#### Identify biomarkers
+		biomarkerList = list()
+		for gene, score, degree in geneList_sorted:
+			if degree > degreeCutoff:
+				biomarkerList.append((gene,score))
+				if len(biomarkerList) == self.n_biomarkers:
+					break
+		self.biomarkers = biomarkerList
+		
+		#### Subnetwork
+		subnetwork = list()
+		biomarkerSet = set(biomarkerList)
+		for edge in edges:
+			if edge[0] in biomarkerSet and edge[1] in biomarkerSet:
+				subnetwork.append(edge)
+		self.subnetwork = subnetwork
+		
+	def _find_degreeCutoff(self, geneDegrees):
+		n_genes  = len(geneDegrees)
+		t_degree = self.t_degree
+		n_degree = floor(n_genes * t_degree)
+		geneDegrees_sorted = sorted(geneDegrees, reverse=True)
+		return geneDegrees_sorted[n_degree]
+		
+	def _compute_geneDegree(self, adjMat):
+		n_genes = adjMat.shape[0]
+		result = np.zeros(n_genes, dtype=np.int32)
+		for i in range(n_genes):
+			result[i] = adjMat[i].sum() + adjMat[:,i].sum()
+		return result
+		
+	def _conduct_modifiedPageRank(self, expr, labels, adjMat):
+		## Set parameters
+		n_samples, n_genes = expr.shape
+		n_poors = np.count_nonzero(labels==1)
+		n_goods = n_samples - n_poors
+		threshold = 1E-5
+		maxIteration = 100
+		
+		## Important conditions
+		if n_poors < 2 or n_goods < 2:
+			return np.zeros(n_genes, dtype=np.float32)
+		
+		## t-score
+		expr_good = expr[labels==0]
+		expr_poor = expr[labels==1]
+		tscores   = np.zeros(n_genes, dtype=np.float32)
+		for i in range(n_genes):
+			tscores[i] = self._compute_tscore(expr_good[:,i], expr_poor[:,i])
+		if tscores.sum() == 0:
+			return np.zeros(n_genes, dtype=np.float32)
+		
+		## weighted adjacency matrix
+		adjMat_weighted = self._make_weighted_adjacencyMatrix(adjMat, tscores)
+		
+		## Normalize adjacency matrix to make a transition matrix
+		adjMat_normalized          = self._normalize_adjMat(adjMat)
+		adjMat_weighted_normalized = self._normalize_adjMat(adjMat_weighted)
+		
+		## PageRank
+		scores          = self._pageRank(adjMat_normalized, threshold, maxIteration)
+		scores_weighted = self._pageRank(adjMat_weighted_normalized, threshold, maxIteration)
+		return scores_weighted / scores
+		
+	def _pageRank(self, mat, threshold, maxIteration):
+		n_genes = mat.shape[0]
+		d = self.dampingFactor
+		
+		init_score    = np.zeros(n_genes, dtype=np.float32) + 1./float(n_genes)
+		current_score = deepcopy(init_score)
+		before_score  = deepcopy(current_score)
+		
+		for i in range(maxIteration):
+			current_score = (1.-d)*init_score + d*(mat.dot(current_score))
+			## termination
+			if np.abs(current_score-before_score).sum() < threshold:
+				break
+			else:
+				before_score = current_score
+		return current_score
+		
+	def _normalize_adjMat(self, adjMat):
+		## preprocess
+		n_genes = adjMat.shape[0]
+		correction = np.zeros(n_genes, dtype=np.float32) + 1./n_genes
+		## normalize
+		result = np.zeros(adjMat.shape, dtype=np.float32)
+		for i in range(n_genes):
+			normalizer = adjMat[:,i].sum()
+			if normalizer > 0.:
+				result[:,i] = adjMat[:,i] / normalizer
+			else:
+				result[:,i] = correction
+		return result
+		
+	def _make_weighted_adjacencyMatrix(self, adjMat, tscores):
+		return adjMat * tscores.reshape([len(tscores),1])
+		
+	def _compute_tscore(self, X, Y):
+		n_X = float(len(X))
+		n_Y = float(len(Y))
+		mean_X = X.mean()
+		mean_Y = Y.mean()
+		var_X = X.var(ddof=1)
+		var_Y = Y.var(ddof=1)
+		
+		if var_X > 0. and var_Y > 0.:
+			## t-statistics
+			p = (n_X-1.) / (n_X+n_Y-2.)
+			denominator = p*var_X + (1.-p)*var_Y
+			denominator *= ((1./n_X) + (1./n_Y))
+			tscore = (mean_X - mean_Y) / sqrt(denominator)
+			tscore = abs(tscore)
+		else:
+			tscore = 0.
+		return tscore
+		
+	def _make_adjacencyMatrix(self, edges, genes):
+		n_genes=len(genes)
+		gene2idx=make_gene2idx(genes)
+		## adjanceny matrix
+		adjMat=np.zeros([n_genes,n_genes], dtype=np.float32)
+		for edge in edges:
+			source=gene2idx[edge[0]]
+			target=gene2idx[edge[1]]
+			adjMat[source][target]=1.
+		return adjMat
+		
+	def _conduct_sampleClustering(self, expr, random_state):
+		## 1) PCA
+		pca = PCA(n_components=2, random_state=random_state)
+		expr_projected = pca.fit_transform(expr)
+		
+		## 2) K-Means
+		if self.n_clusters==0:
+			silhouetteScores = list()
+			for i in [2,3,4,5]:
+				kmeans = KMeans(n_clusters=i, random_state=random_state).fit(expr_projected)
+				score  = silhouette_score(expr_projected, kmeans.labels_, random_state=random_state)
+				silhouetteScores.append((i,score))
+			silhouetteScores = sorted(silhouetteScores, key=itemgetter(1), reverse=True)
+			self.n_clusters  = silhouetteScores[0][0]
+			
+		kmeans = KMeans(n_clusters=self.n_clusters, random_state=random_state).fit(expr_projected)
+		return kmeans.labels_
+	
+	
+	
+def compute_accuracy_via_crossvaldiation(data, labels, network, K, random_state, dampingFactor, n_biomarkers, n_clusters, t_degree):
+		## set parameters
+		n_samples, n_genes = data['expr'].shape
+		
+		## Cross validation
+		cv = StratifiedKFold(n_splits=K, random_state=random_state, shuffle=False)
+		clf = RandomForestClassifier(n_estimators=100, random_state=random_state)
+		
+		k = 1
+		mean_tpr = np.zeros(100, dtype=np.float32)
 		mean_fpr = np.linspace(start=0, stop=1, num=100)
-		
-		for train, test in cv.split(ranked_mat_test, label_test):		
-			probas_ = clf.fit(ranked_mat_test[train], label_test[train]).predict_proba(ranked_mat_test[test])
-			
-			# compute ROC curve and Area the curve
-			fpr, tpr, thresholds = roc_curve(label_test[test], probas_[:,1])
-			mean_tpr += interp(mean_fpr, fpr, tpr)
-			mean_tpr[0] = .0
-		
-		mean_tpr /= 10
+		mean_acc = 0.
+		for train, test in cv.split(data['expr'], labels):
+			## 1) gene selection
+			cpr = CPR(dampingFactor=dampingFactor,
+					  n_biomarkers=n_biomarkers,
+					  n_clusters=n_clusters,
+					  t_degree=t_degree)
+			cpr.fit(expr=data['expr'][train],
+					labels=labels[train],
+					genes=data['gene'],
+					edges=network['edge'],
+					random_state=1)
+			biomarkers = cpr.get_biomarkers()
+			## 2) Restrict data
+			biomarkerList   = list(map(lambda elem:elem[0], biomarkers))
+			data_restricted = restrict_data(data,biomarkerList)
+			## 3) rankdata
+			# expr_ranked = np.zeros(data_restricted['expr'].shape, dtype=np.float32)
+			# for i, arr in enumerate(data_restricted['expr']):
+				# expr_ranked[i] = rankdata(arr)
+			expr_ranked = data_restricted['expr']
+			## 4) fit
+			clf.fit(expr_ranked[train], labels[train])
+			## 5) compute accuracy
+			pred     = clf.predict(expr_ranked[test])
+			mean_acc += accuracy_score(labels[test], pred, normalize=False)
+			## 6) compute AUC-ROC
+			probas_              = clf.predict_proba(expr_ranked[test])
+			fpr, tpr, thresholds = roc_curve(labels[test], probas_[:,1])
+			mean_tpr             += np.interp(mean_fpr, fpr, tpr)
+			## 7) print accuracy
+			print('    %d%% complete!' % int(k/K*100))
+			k += 1
+		mean_tpr /= K
+		mean_tpr[0] = 0.
 		mean_tpr[-1] = 1.
 		mean_auc = auc(mean_fpr, mean_tpr)
+		mean_acc /= n_samples
+		return mean_auc, mean_acc
 		
-		return mean_auc
-	
-	""" fitting
-	geneList : list() for genes
-		ex) [gene1, gene2, ...]
-	
-	edgeList : list() for edges in Network
-		ex) [(gene1, gene2), (gene1, gene3), ...]
-	
-	data_train : 2dim np.array() whose columns represent poor prognosis samples for train
-	    and rows represent genes ordered in the order on the geneList
 		
-	label_train : 1dim np.array() for labels of samples
-		The order of samples must be mapped with elemenes in data_train
-		
-	randomState: This parameter is used for scikit-learn functinos
-		Default value is set as None.
-	"""
-	def fit(self, geneList, edgeList, data_train, label_train, randomState=None):
-		# basic number parameters
-		n_genes = len(geneList)
-		n_edges = len(edgeList)
-		n_samples = len(data_train)
+def parse_arguments():
+	parser=argparse.ArgumentParser(description="""CPR is a program to identify prognostic genes (biomarkers) and use them to predict prognosis of cancer patients.
+												Please refer to included 'manual.pdf'. For more detail, please refer to 'Improved prediction for breast cancer outcome by identifying heterogeneous biomarkers'.""")
+	parser.add_argument('EXPRESSION_FILE', type=str, help="Tab-delimited file for gene expression profiles")
+	parser.add_argument('NETWORK_FILE', type=str, help="Tab-delimited file for gene interaction network")
+	parser.add_argument('CLINICAL_FILE', type=str, help="Tab-delimited file for patient's clinical data")
+	parser.add_argument('RESULT_FILE', type=str, help="A summary of results are written in the file. If RESULT_FILENAME is not given, all results are showed in command lines. The summary have 1) accuracy, 2) biomarkers, and 3) subnetwork with biomarkers")
+	parser.add_argument('-m', '--numClusters', type=int, default=0, help="This parameter decides number of sample clusters to handle the heterogeneity of patients. 'AUTO'(=0) makes the number of clusters be decided by using the silhouette score. If a specific number is given, the K-means is carried out with the number. Default='AUTO'(=0)")
+	parser.add_argument('-d', '--dampingFactor', type=float, default=0.7, help="This parameter decides an influence of network information on prediction. The value must be between 0.0 and 1.0. Default=0.7")
+	parser.add_argument('-n', '--numBiomarkers', type=int, default=70, help="This parameter decides number of biomarkers to use in prediction. Default=70")
+	parser.add_argument('-c', '--cutoffDegree', type=float, default=0.02, help="This parameter is used to identify biomarkers. Default=0.02")
+	return parser.parse_args()
 
-		# user parameters
-		n_biomarkers= self.n_biomarkers
-		n_clusters  = self.n_clusters
-		n_pc        = self.n_pc
-		n_trees     = self.n_trees
-		t_degree    = self.t_degree
-		
-		# 2.4) make gene indices
-		# geneToIndex: dict() for (key=geneName, value=index)
-		geneToIndex = self._makeGeneIndices(geneList)
-		
-		# 2.5) Computing degree of genes in network
-		# geneDegrees: dict() for (key=geneName, value=degree in network)
-		geneDegrees = self._computeDegree(geneList, edgeList)
-		
-		# 2.6) calculate degreecut with t_degree
-		degreeList = geneDegrees.values()
-		degreeList = sorted(degreeList, reverse=True)
-		if t_degree == 1:
-			degreecut = -1
-		else:
-			degreecut = degreeList[ int(n_genes * t_degree) ]
-		
-		"""3. K Means clustering"""
-		clusters = list()
-		if n_clusters > 1:
-			# 3.1) normalizing gene expressions genewise using z-scoring
-			zscored_data_train = self._zscoring(data_train.T, n_genes)
-			zscored_data_train = zscored_data_train.T    # genewise --> samplewise
-			
-			# 3.2) PCA to reduce high-dimension
-			pca = PCA(n_components=n_pc, random_state=randomState)
-			pc_data_train = pca.fit_transform(zscored_data_train)
-			
-			# 3.3) K Means clustering
-			kmeans        = KMeans(n_clusters=n_clusters, random_state=randomState).fit(pc_data_train)
-			cluster_train = kmeans.labels_
-			
-			for i in range(n_clusters):
-				clusters.append(dict())
-				clusters[i]["label_train"] = label_train[cluster_train == i]
-				clusters[i]["data_train"]  = data_train[cluster_train == i]
-				
-			# 3.4) If some cluster has only one label, then raise cluster error
-			for i in range(n_clusters):
-				labels = clusters[i]["label_train"]
-				if len(labels[labels==1]) == 0 or len(labels[labels==0]) == 0:
-					print("Cluster Error: cluster[%d] has only one label" % i)
-					exit(1)
-					
-		elif n_clusters == 1:
-			clusters.append(dict())
-			clusters[0]["label_train"] = label_train
-			clusters[0]["data_train"]  = data_train
-			
-		
-		"""4. PageRank"""
-		PRresult = list()
-		for i in range(n_clusters):
-			tmp_PRresult = self._modifiedPageRank(clusters[i]["data_train"], clusters[i]["label_train"], geneToIndex, edgeList)
-			PRresult.append(tmp_PRresult)
-		
-		"""5. Order genes by avgRank and degree"""
-		geneRank = list()
-		for i in range(n_clusters):
-			geneRank.append(dict())
-			for j in range(len(PRresult[i])):
-				geneRank[i][geneList[PRresult[i][j]]] = j
-		
-		PRavgDict = dict()
-		for geneName in geneList:
-			PRavgDict[geneName] = 0
-			for i in range(n_clusters):
-				PRavgDict[geneName] -= geneRank[i][geneName]    # Note: To easy sort, we use negative ranking
-		
-		PRavgList = PRavgDict.items()
-		PRavgList = map(lambda elem: (geneToIndex[elem[0]], geneDegrees[elem[0]], elem[1]), PRavgList)
-		PRavgList = sorted(PRavgList, key=itemgetter(2,1), reverse=True)
-		rankedGeneIndices = map(lambda elem:elem[0], PRavgList)
-		self.rankedGenes = deepcopy(map(lambda geneIdx:geneList[geneIdx], rankedGeneIndices))
-		
-		"""6. collect candidates of biomarker"""
-		biomarkers = list()
-		for i in range(n_genes):
-			geneIdx  = rankedGeneIndices[i]
-			geneName = geneList[geneIdx]
-			degree   = geneDegrees[geneName]
-			if degree > degreecut:
-				biomarkers.append(geneList[geneIdx])
-				if len(biomarkers) >= n_biomarkers:
-					break
-		
-		self.biomarkers = deepcopy(biomarkers)
-		self.isFitted = True		
-		
+def load_data(dataFile):
+	'''
+	PATIENT   TCGA-AR-A24H  TCGA-AR-A24L  TCGA-AR-A24M  TCGA-AR-A24N
+	A1CF      -0.436158     -0.276784     -0.309453     -0.305223
+	A2M       1.90128       2.72735       4.03939       1.33212
+	A4GALT    -0.408337     -0.247608     -0.260444     -0.234695
+	'''
+	with open(dataFile) as fin:
+		lines = fin.readlines()
+	## preprocessing
+	lines = list(map(lambda line:line.rstrip().split('\t'), lines))
+	## header
+	sample = np.array(lines[0][1:])
+	## body
+	gene = list()
+	expr = list()
+	for line in lines[1:]:
+		gene.append(line[0])
+		expr.append(line[1:])
+	gene = np.array(gene)
+	expr = np.array(expr, dtype=np.float32).T  # genewise-->samplewise
+	## maek result
+	result = {'sample':sample,
+			  'expr':expr,
+			  'gene':gene}
+	return result
 	
-	def _ranking(self, X, n_X):
-		result = deepcopy(X)
-				
-		for i in range(n_X):
-			vectorLength = len(X[i])
-			arr = list()
-			
-			for j in range(vectorLength):
-				arr.append( (j, X[i][j]) )
-				
-			arr = sorted(arr, key=itemgetter(1))
-			arr = map(lambda elem:elem[0], arr)
-			
-			for j in range(vectorLength):
-				 result[i][arr[j]] = j
-		
-		return result
+def load_network(dataFile):
+	'''
+	GENE1   GENE2
+	RPL37A  RPS27A
+	MRPL1   MRPS36
+	RFC3    SPRTN
+	ZFP82   ZFP92
+	'''
+	with open(dataFile) as fin:
+		lines = fin.readlines()
+	## preprocessing
+	lines = list(map(lambda line:line.rstrip().split('\t'), lines))
+	## list of edges
+	edgeList = lines[1:]
+	## gene set
+	geneSet=set()
+	for edge in edgeList:
+		geneSet.add(edge[0])
+		geneSet.add(edge[1])
+	## make result
+	result = {'edge':edgeList,
+			  'gene':geneSet}
+	return result
 	
-	def _zscoring(self, X, n_X):
-		result = deepcopy(X)
-		for i in range(n_X):
-			mean = X[i].mean()
-			std  = X[i].std()
-			
-			if std > 0.:
-				result[i] -= mean
-				result[i] /= std
-			else:
-				result[i] *= 0.
-				
-		return result
-		
-		
-	def _modifiedPageRank(self, mat, labels, geneToIndex, edgeList):
-		"""1. parameters"""
-		d          = self.dampingFactor
-		iterations = self.iterations
-		
-		mat_poor = mat[labels == 1].T	# samplewise --> genewise
-		mat_good = mat[labels == 0].T   # samplewise --> genewise
-		
-		n_poor  = len(mat_poor[0])
-		n_good  = len(mat_good[0])
-		n_genes = len(mat_poor)
-		
-		# print("n_poor: %d" % n_poor)
-		# print("n_good: %d" % n_good)
-		# print("n_genes: %d" % n_genes)
-		
-		initValue = 1. / float(n_genes)
-		
-		"""2. generate adjacency matrix of weighted network"""
-		# 2.1) construct adjacency matrix
-		adjMat = np.zeros([n_genes, n_genes]).astype(np.float64)
-		
-		for edge in edgeList:
-			if geneToIndex.has_key(edge[0]) and geneToIndex.has_key(edge[1]):
-				x = geneToIndex[edge[0]]
-				y = geneToIndex[edge[1]]
-				adjMat[x][y] = adjMat[y][x] = 1.
-		
-		# 2.2) make unweighted network
-		un_adjMat = deepcopy(adjMat)
-			
-		# 2.3) compute t statistics
-		TScores = np.zeros(n_genes).astype(np.float64)
-		for i in range(n_genes):
-			sampleMeans = [mat_poor[i].mean(), mat_good[i].mean()]
-			sampleStds  = [mat_poor[i].std(ddof=1), mat_good[i].std(ddof=1)]
-		
-			# print(sampleMeans)
-			# print(sampleStds)
-		
-			firstDenominator  = sqrt( ((float(n_poor) - 1.)*sampleStds[0]*sampleStds[0] + (float(n_good) - 1.)*sampleStds[1]*sampleStds[1]) / float(n_poor + n_good - 2))
-			secondDenominator = sqrt( (1. / float(n_poor)) + (1. / float(n_good)) )
-			
-			# print(firstDenominator)
-			# print(secondDenominator)
-			# print("")
-				
-			tmp_TScore = (sampleMeans[0] - sampleMeans[1]) / (firstDenominator * secondDenominator)
-					
-			if tmp_TScore < 0.:
-				TScores[i] -= tmp_TScore
-			else:
-				TScores[i] += tmp_TScore
-		
-		# 2.4) give weights to adjacency matrix
-		for x in range(n_genes):
-			if TScores[x] > 0:
-				adjMat[x] *= TScores[x]
-			
-		# 2.5) normalize each column to make 'col.sum() = 1'
-		adjMat = self._normalize_col(adjMat, n_genes, initValue)
-		un_adjMat = self._normalize_col(un_adjMat, n_genes, initValue)
-			
-		"""3. compute PRScore iteratively"""
-		initScore = np.zeros(n_genes) + initValue
-		PRScore   = deepcopy(initScore)
-		un_PRScore = deepcopy(initScore)
-		
-		for i in range(iterations):
-			PRScore    = (1.-d)*initScore + d*(adjMat.dot(PRScore))
-			un_PRScore = (1.-d)*initScore + d*(un_adjMat.dot(un_PRScore))
-		
-		"""4. sorted genes by PRScore"""
-		result = list()
-		for i in range(n_genes):
-			result.append( (i, PRScore[i] / un_PRScore[i]) )
-		
-		# reverse=True --> descending order
-		result = sorted(result, key=itemgetter(1), reverse=True)
-		result = map(lambda elem:elem[0], result)
-		
-		return result
-		
-
-	def _normalize_col(self, mat, n_genes, initValue):	
-		mat = mat.T
-		for y in range(n_genes):
-			sum = mat[y].sum()
-			
-			if sum > .0:
-				mat[y] /= sum
-			else:
-				mat[y] += initValue
-		
-		mat = mat.T
-		return mat
-		
-	def _computeDegree(self, geneList, edgeList):
-		geneDegrees = dict()
-		
-		# 1. initialize
-		for geneName in geneList:
-			geneDegrees[geneName] = 0
-			
-		# 2. count neighbors
-		for edge in edgeList:
-			firstGene  = edge[0]
-			secondGene = edge[1]
-			geneDegrees[firstGene]  += 1
-			geneDegrees[secondGene] += 1
-			
-		return geneDegrees
-
-	def _makeGeneIndices(self, geneList):
-		geneToIndex = dict()
-		
-		n_genes = len(geneList)
-		for i in range(n_genes):
-			geneName = geneList[i]
-			geneToIndex[geneName] = i
-		
-		return geneToIndex
-		
-	def _parsingEdgeList(self, commonGenes, edgeList):
-		edgeList = list()
-		parsedEdgeSet  = set()
-		
-		for elem in edgeList:
-			firstGene  = elem[0]
-			secondGene = elem[1]
-			if firstGene in commonGenes and secondGene in commonGenes:
-				# In undirected graph, (A,B) and (B,A) are equal.
-				# To remove redundnacy, we choose (A,B) not (B,A).
-				if firstGene > secondGene:
-					edge = (secondGene, firstGene)
-				else:
-					edge = (firstGene, secondGene)
-				
-				if edge not in parsedEdgeSet:
-					edgeList.append(edge)
-					parsedEdgeSet.add(edge)
-		
-		return edgeList
-		
+def load_clinical(dataFile):
+	'''
+	PATIENT         LABEL
+	TCGA-AR-A24H    0
+	TCGA-AR-A24L    0
+	TCGA-AR-A24M    0
+	TCGA-AR-A24N    0
+	'''
+	with open(dataFile) as fin:
+		lines = fin.readlines()
+	## preprocessing
+	lines = list(map(lambda line:line.rstrip().split('\t'), lines))
+	## make result
+	result = dict()
+	for line in lines[1:]:
+		sample = line[0]
+		label = int(line[1])
+		result[sample]=label
+	return result
 	
-	def _findCommonGenes(self, geneList, edgeList):
-		commonGenes = set()
-		for edge in edgeList:
-			commonGenes.add(edge[0])
-			commonGenes.add(edge[1])
-		
-		commonGenes = commonGenes.intersection( set(geneList) )
-		
-		return commonGenes
+def find_commonGeneList(X,Y):
+	X=set(X)
+	Y=set(Y)
+	result = X.intersection(Y)
+	result = list(result)
+	result = sorted(result)  # sorted by gene symbol
+	return result
+	
+def make_gene2idx(geneList):
+	result=dict()
+	for i, gene in enumerate(geneList):
+		result[gene]=i
+	return result
+	
+def restrict_data(data,commonGeneList):	
+	## find indices corresponding to common genes
+	geneToIdx = make_gene2idx(data['gene'])
+	idx = list(map(lambda gene:geneToIdx[gene], commonGeneList))
+	## make result
+	result = {'sample':deepcopy(data['sample']),
+			  'expr':data['expr'][:,idx],
+			  'gene':np.array(commonGeneList)}
+	return result
 
+def restrict_network(network,commonGeneList):
+	## find edges with target genes
+	edgeList = list()
+	commonGeneSet = set(commonGeneList)
+	for edge in network['edge']:
+		if edge[0] in commonGeneSet and edge[1] in commonGeneSet:
+			edgeList.append(edge)
+	## make result
+	result = {'edge':edgeList,
+			  'gene':commonGeneSet}
+	return result
+	
+def map_labels(clinical,sampleList):
+	try:
+		result = list(map(lambda sample:clinical[sample], sampleList))
+	except:
+		print('ERROR: There is a mismatched sample between expression data and clinical data. Please make complete data')
+		exit(1)
+	return np.array(result)
 
 
 if __name__=="__main__":
-	main(len(sys.argv), sys.argv)
+	main()
