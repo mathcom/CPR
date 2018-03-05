@@ -1,5 +1,5 @@
 '''
-2018.03.03
+2018.03.04
 1. Remove the dependency of the sys and pickle module.
 2. Change the procedure for parsing arguments using the argparse module.
 3. Change the procedure for loading data
@@ -8,7 +8,7 @@
 import argparse
 import numpy as np
 from copy import deepcopy
-from math import sqrt, floor
+from math import sqrt, ceil
 from operator import itemgetter
 from scipy.stats import rankdata
 from sklearn.cluster import KMeans
@@ -20,9 +20,11 @@ from sklearn.model_selection import StratifiedKFold
 def main():
 	'''
 	args={'EXPRESSION_FILE', 'NETWORK_FILE', 'CLINICAL_FILE', 'RESULT_FILE',
-		  'dampingFactor', 'numBiomarkers', 'numClusters', 'cutoffDegree'}
+		  'dampingFactor', 'numBiomarkers', 'numClusters', 'conditionHubgene'}
 	'''
 	args = parse_arguments()
+	print('>>> 0. Arguments')
+	print(args)
 	
 	
 	######## 1. Load data
@@ -68,7 +70,7 @@ def main():
 	cpr = CPR(dampingFactor=args.dampingFactor,
 			  n_biomarkers=args.numBiomarkers,
 			  n_clusters=args.numClusters,
-			  t_degree=args.cutoffDegree,
+			  c_hubgene=args.conditionHubgene,
 			  logshow=True)
 	cpr.fit(expr=data['expr'],
 			labels=labels,
@@ -85,7 +87,7 @@ def main():
 															  dampingFactor=args.dampingFactor,
 															  n_biomarkers=args.numBiomarkers,
 															  n_clusters=args.numClusters,
-															  t_degree=args.cutoffDegree)
+															  c_hubgene=args.conditionHubgene)
 	print('    AUC-ROC : %.3f' % mean_auc)
 	print('    Accuracy: %.3f' % mean_acc)
 	
@@ -106,13 +108,13 @@ class CPR:
 	def __init__(self,
 				 dampingFactor=0.7,
 				 n_biomarkers=70,
-				 n_clusters='AUTO',
-				 t_degree=0.02,
+				 n_clusters=0,
+				 c_hubgene=0.02,
 				 logshow=False):
 		self.dampingFactor = dampingFactor
 		self.n_biomarkers  = n_biomarkers
 		self.n_clusters    = n_clusters
-		self.t_degree      = t_degree
+		self.c_hubgene     = c_hubgene
 		self.logshow       = logshow
 		
 	def get_subnetwork(self):
@@ -159,7 +161,13 @@ class CPR:
 		
 		#### Degree in network
 		geneDegrees  = self._compute_geneDegree(adjMat)
-		degreeCutoff = self._find_degreeCutoff(geneDegrees)
+		if self.c_hubgene == 1.:
+			hubCriterion = 0
+		elif self.c_hubgene > 0. and self.c_hubgene < 1.:
+			hubCriterion = self._find_criterionHubgene(geneDegrees)
+		else:
+			print('ERROR: The condition of hub-gene must be between 0 and 1.')
+			exit(1)
 		
 		#### Sorting
 		geneList        = list(zip(genes,geneScores,geneDegrees))
@@ -168,7 +176,7 @@ class CPR:
 		#### Identify biomarkers
 		biomarkerList = list()
 		for gene, score, degree in geneList_sorted:
-			if degree > degreeCutoff:
+			if degree > hubCriterion:
 				biomarkerList.append((gene,score))
 				if len(biomarkerList) == self.n_biomarkers:
 					break
@@ -176,18 +184,18 @@ class CPR:
 		
 		#### Subnetwork
 		subnetwork = list()
-		biomarkerSet = set(biomarkerList)
+		biomarkerSet = set(list(map(lambda elem:elem[0], biomarkerList)))
 		for edge in edges:
-			if edge[0] in biomarkerSet and edge[1] in biomarkerSet:
-				subnetwork.append(edge)
+			if edge[0] in biomarkerSet or edge[1] in biomarkerSet:
+				subnetwork.append((edge[0],edge[1]))
 		self.subnetwork = subnetwork
 		
-	def _find_degreeCutoff(self, geneDegrees):
+	def _find_criterionHubgene(self, geneDegrees):
 		n_genes  = len(geneDegrees)
-		t_degree = self.t_degree
-		n_degree = floor(n_genes * t_degree)
+		c_hubgene = self.c_hubgene
+		n_hubgene = ceil(n_genes * c_hubgene)
 		geneDegrees_sorted = sorted(geneDegrees, reverse=True)
-		return geneDegrees_sorted[n_degree]
+		return geneDegrees_sorted[n_hubgene]
 		
 	def _compute_geneDegree(self, adjMat):
 		n_genes = adjMat.shape[0]
@@ -313,7 +321,7 @@ class CPR:
 	
 	
 	
-def compute_accuracy_via_crossvaldiation(data, labels, network, K, random_state, dampingFactor, n_biomarkers, n_clusters, t_degree):
+def compute_accuracy_via_crossvaldiation(data, labels, network, K, random_state, dampingFactor, n_biomarkers, n_clusters, c_hubgene):
 		## set parameters
 		n_samples, n_genes = data['expr'].shape
 		
@@ -330,7 +338,7 @@ def compute_accuracy_via_crossvaldiation(data, labels, network, K, random_state,
 			cpr = CPR(dampingFactor=dampingFactor,
 					  n_biomarkers=n_biomarkers,
 					  n_clusters=n_clusters,
-					  t_degree=t_degree)
+					  c_hubgene=c_hubgene)
 			cpr.fit(expr=data['expr'][train],
 					labels=labels[train],
 					genes=data['gene'],
@@ -370,12 +378,12 @@ def parse_arguments():
 												Please refer to included 'manual.pdf'. For more detail, please refer to 'Improved prediction for breast cancer outcome by identifying heterogeneous biomarkers'.""")
 	parser.add_argument('EXPRESSION_FILE', type=str, help="Tab-delimited file for gene expression profiles")
 	parser.add_argument('NETWORK_FILE', type=str, help="Tab-delimited file for gene interaction network")
-	parser.add_argument('CLINICAL_FILE', type=str, help="Tab-delimited file for patient's clinical data")
-	parser.add_argument('RESULT_FILE', type=str, help="A summary of results are written in the file. If RESULT_FILENAME is not given, all results are showed in command lines. The summary have 1) accuracy, 2) biomarkers, and 3) subnetwork with biomarkers")
-	parser.add_argument('-m', '--numClusters', type=int, default=0, help="This parameter decides number of sample clusters to handle the heterogeneity of patients. 'AUTO'(=0) makes the number of clusters be decided by using the silhouette score. If a specific number is given, the K-means is carried out with the number. Default='AUTO'(=0)")
-	parser.add_argument('-d', '--dampingFactor', type=float, default=0.7, help="This parameter decides an influence of network information on prediction. The value must be between 0.0 and 1.0. Default=0.7")
-	parser.add_argument('-n', '--numBiomarkers', type=int, default=70, help="This parameter decides number of biomarkers to use in prediction. Default=70")
-	parser.add_argument('-c', '--cutoffDegree', type=float, default=0.02, help="This parameter is used to identify biomarkers. Default=0.02")
+	parser.add_argument('CLINICAL_FILE', type=str, help="Tab-delimited file for patient's clinical data. LABEL=1:poor prognosis and 0:good prognosis.")
+	parser.add_argument('RESULT_FILE', type=str, help="The results of CPR are saved with the following three names: 1) *_biomarker.txt, 2) *_subnetwork.txt, 3) *_accuracy.txt")
+	parser.add_argument('-m', '--numClusters', type=int, default=0, help="A parameter of K-means clustering algorithm. This parameter decides number of sample clusters to handle the heterogeneity of patients. The default value makes the number of clusters be determined by using the silhouette score. If a specific number is given, the K-means is carried out with the number. (default=0)")
+	parser.add_argument('-d', '--dampingFactor', type=float, default=0.7, help="A parameter of PageRank algorithm.This parameter decides an influence of network information on prediction. The value must be between 0.0 and 1.0. (default=0.7)")
+	parser.add_argument('-n', '--numBiomarkers', type=int, default=70, help="This parameter decides number of biomarkers to use in prediction. (default=70)")
+	parser.add_argument('-c', '--conditionHubgene', type=float, default=0.02, help="This parameter is used to identify a hub-gene. When c is a given parameter and x is the total of genes, we define top cx genes with high degree as hub-genes. (default=0.02)")
 	return parser.parse_args()
 
 def load_data(dataFile):
