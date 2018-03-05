@@ -20,7 +20,7 @@ from sklearn.model_selection import StratifiedKFold
 def main():
 	'''
 	args={'EXPRESSION_FILE', 'NETWORK_FILE', 'CLINICAL_FILE', 'RESULT_FILE',
-		  'dampingFactor', 'numBiomarkers', 'numClusters', 'conditionHubgene'}
+	      'dampingFactor', 'numBiomarkers', 'numClusters', 'conditionHubgene'}
 	'''
 	args = parse_arguments()
 	print('>>> 0. Arguments')
@@ -34,7 +34,7 @@ def main():
 	         'gene':geneset}
 	data={'expr':exprArr,
 	      'gene':geneList,
-		  'sample':sampleList}
+	      'sample':sampleList}
 	clinicial: a dictionary whose key and value is 'sampleName' and its label, respectively.
 	'''
 	data     = load_data(args.EXPRESSION_FILE)
@@ -68,26 +68,26 @@ def main():
 	######## 3. Gene selection with 'Clustering and Modified PageRank (CPR)'
 	print('>>> 3. Conduct CPR')
 	cpr = CPR(dampingFactor=args.dampingFactor,
-			  n_biomarkers=args.numBiomarkers,
-			  n_clusters=args.numClusters,
-			  c_hubgene=args.conditionHubgene,
-			  logshow=True)
+	          n_biomarkers=args.numBiomarkers,
+	          n_clusters=args.numClusters,
+	          c_hubgene=args.conditionHubgene,
+	          logshow=True)
 	cpr.fit(expr=data['expr'],
-			labels=labels,
-			genes=data['gene'],
-			edges=network['edge'],
-			random_state=1)
+	        labels=labels,
+	        genes=data['gene'],
+	        edges=network['edge'],
+	        random_state=1)
 	biomarkers = cpr.get_biomarkers()
 	subnetwork = cpr.get_subnetwork()
 	
 	######## 4. 10 fold Cross Validation
 	print('>>> 4. 10-fold Cross validation')	
 	mean_auc, mean_acc = compute_accuracy_via_crossvaldiation(data=data, labels=labels, network=network,
-															  K=10, random_state=1,
-															  dampingFactor=args.dampingFactor,
-															  n_biomarkers=args.numBiomarkers,
-															  n_clusters=args.numClusters,
-															  c_hubgene=args.conditionHubgene)
+	                                                          K=10, random_state=1,
+	                                                          dampingFactor=args.dampingFactor,
+	                                                          n_biomarkers=args.numBiomarkers,
+	                                                          n_clusters=args.numClusters,
+	                                                          c_hubgene=args.conditionHubgene)
 	print('    AUC-ROC : %.3f' % mean_auc)
 	print('    Accuracy: %.3f' % mean_acc)
 	
@@ -409,8 +409,8 @@ def load_data(dataFile):
 	expr = np.array(expr, dtype=np.float32).T  # genewise-->samplewise
 	## maek result
 	result = {'sample':sample,
-			  'expr':expr,
-			  'gene':gene}
+		      'expr':expr,
+		      'gene':gene}
 	return result
 	
 def load_network(dataFile):
@@ -434,7 +434,7 @@ def load_network(dataFile):
 		geneSet.add(edge[1])
 	## make result
 	result = {'edge':edgeList,
-			  'gene':geneSet}
+		      'gene':geneSet}
 	return result
 	
 def load_clinical(dataFile):
@@ -477,8 +477,8 @@ def restrict_data(data,commonGeneList):
 	idx = list(map(lambda gene:geneToIdx[gene], commonGeneList))
 	## make result
 	result = {'sample':deepcopy(data['sample']),
-			  'expr':data['expr'][:,idx],
-			  'gene':np.array(commonGeneList)}
+	          'expr':data['expr'][:,idx],
+	          'gene':np.array(commonGeneList)}
 	return result
 
 def restrict_network(network,commonGeneList):
@@ -490,7 +490,7 @@ def restrict_network(network,commonGeneList):
 			edgeList.append(edge)
 	## make result
 	result = {'edge':edgeList,
-			  'gene':commonGeneSet}
+	          'gene':commonGeneSet}
 	return result
 	
 def map_labels(clinical,sampleList):
