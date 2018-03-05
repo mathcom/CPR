@@ -106,11 +106,11 @@ def main():
 
 class CPR:
 	def __init__(self,
-				 dampingFactor=0.7,
-				 n_biomarkers=70,
-				 n_clusters=0,
-				 c_hubgene=0.02,
-				 logshow=False):
+		         dampingFactor=0.7,
+		         n_biomarkers=70,
+		         n_clusters=0,
+		         c_hubgene=0.02,
+		         logshow=False):
 		self.dampingFactor = dampingFactor
 		self.n_biomarkers  = n_biomarkers
 		self.n_clusters    = n_clusters
