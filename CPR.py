@@ -349,10 +349,9 @@ def compute_accuracy_via_crossvaldiation(data, labels, network, K, random_state,
 			biomarkerList   = list(map(lambda elem:elem[0], biomarkers))
 			data_restricted = restrict_data(data,biomarkerList)
 			## 3) rankdata
-			# expr_ranked = np.zeros(data_restricted['expr'].shape, dtype=np.float32)
-			# for i, arr in enumerate(data_restricted['expr']):
-				# expr_ranked[i] = rankdata(arr)
-			expr_ranked = data_restricted['expr']
+			expr_ranked = np.zeros(data_restricted['expr'].shape, dtype=np.float32)
+			for i, arr in enumerate(data_restricted['expr']):
+				expr_ranked[i] = rankdata(arr)
 			## 4) fit
 			clf.fit(expr_ranked[train], labels[train])
 			## 5) compute accuracy
