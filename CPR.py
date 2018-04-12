@@ -1,10 +1,3 @@
-'''
-2018.03.04
-1. Remove the dependency of the sys and pickle module.
-2. Change the procedure for parsing arguments using the argparse module.
-3. Change the procedure for loading data
-
-'''
 import argparse
 import numpy as np
 from copy import deepcopy
@@ -19,8 +12,8 @@ from sklearn.model_selection import StratifiedKFold
 
 def main():
 	'''
-	args={'EXPRESSION_FILE', 'NETWORK_FILE', 'CLINICAL_FILE', 'RESULT_FILE',
-	      'dampingFactor', 'numBiomarkers', 'numClusters', 'conditionHubgene'}
+	args={'EXPRESSION_FILE', 'CLINICAL_FILE', 'NETWORK_FILE', 'RESULT_FILE',
+	      'dampingFactor', 'numBiomarkers', 'numClusters', 'conditionHubgene', 'v'}
 	'''
 	args = parse_arguments()
 	print('>>> 0. Arguments')
@@ -30,20 +23,22 @@ def main():
 	######## 1. Load data
 	print('>>> 1. Load data')
 	'''
-	network={'edge':edgeList,
-	         'gene':geneset}
 	data={'expr':exprArr,
 	      'gene':geneList,
 	      'sample':sampleList}
 	clinicial: a dictionary whose key and value is 'sampleName' and its label, respectively.
+	network={'edge':edgeList,
+	         'gene':geneset}
 	'''
 	data     = load_data(args.EXPRESSION_FILE)
-	network  = load_network(args.NETWORK_FILE)
 	clinical = load_clinical(args.CLINICAL_FILE)
+	network  = load_network(args.NETWORK_FILE)
 	
 	
 	######## 2. Restrict data with the intersection of gene sets
 	print('>>> 2. Preprocess data')
+	labels = map_labels(clinical,data['sample'])
+	
 	'''
 	NOTE: A given network and data can have different gene sets.
 	      Find the common set, and restrict network and data.
@@ -51,19 +46,16 @@ def main():
 	commonGeneList = find_commonGeneList(network['gene'],data['gene'])
 	network        = restrict_network(network,commonGeneList)
 	data           = restrict_data(data,commonGeneList)
+	
 	'''
 	data information
 	'''
 	n_samples, n_genes = data['expr'].shape
 	n_edges            = len(network['edge'])
 	print('    n_samples: %d' % n_samples)
-	print('    n_genes  : %d' % n_genes)
-	print('    n_edges  : %d' % n_edges)
+	print('    n_genes  : %d\t(common genes in both EXPRESSION and NETWORK)' % n_genes)
+	print('    n_edges  : %d\t(edges with the common genes)' % n_edges)
 	
-	
-	######## 3. Make input for gene selection procedure
-	labels = map_labels(clinical,data['sample'])
-
 	
 	######## 3. Gene selection with 'Clustering and Modified PageRank (CPR)'
 	print('>>> 3. Conduct CPR')
@@ -76,33 +68,59 @@ def main():
 	        labels=labels,
 	        genes=data['gene'],
 	        edges=network['edge'],
-	        random_state=1)
+	        random_state=0)
 	biomarkers = cpr.get_biomarkers()
 	subnetwork = cpr.get_subnetwork()
+	PRscores   = cpr.get_PRscores()
 	
-	######## 4. 10 fold Cross Validation
-	print('>>> 4. 10-fold Cross validation')	
-	mean_auc, mean_acc = compute_accuracy_via_crossvaldiation(data=data, labels=labels, network=network,
-	                                                          K=10, random_state=1,
-	                                                          dampingFactor=args.dampingFactor,
-	                                                          n_biomarkers=args.numBiomarkers,
-	                                                          n_clusters=args.numClusters,
-	                                                          c_hubgene=args.conditionHubgene)
-	print('    AUC-ROC : %.3f' % mean_auc)
-	print('    Accuracy: %.3f' % mean_acc)
-	
-	######### 5. Summary for results
+	######### 4. Summary for results
+	print('>>> 4. Save results')
+	print('    %s' % args.RESULT_FILE+'_biomarker.txt')
 	with open(args.RESULT_FILE+'_biomarker.txt', 'w') as fout:
+		## header
 		fout.write('GeneSymbol\tPRscore\n')
+		## body
 		for elem in biomarkers:
 			fout.write('%s\t%.6f\n' % elem)
+			
+	print('    %s' % args.RESULT_FILE+'_score.txt')		
+	with open(args.RESULT_FILE+'_score.txt', 'w') as fout:
+		## header
+		fout.write('GeneSymbol')
+		for i in range(len(PRscores[0])-1):
+			fout.write('\tPRScore_%d' % i)
+		fout.write('\n')
+		## body
+		for elem in PRscores:
+			fout.write('%s' % elem[0])
+			for i in range(1,len(elem)):
+				fout.write('\t%.6f' % elem[i])
+			fout.write('\n')
+			
+	print('    %s' % args.RESULT_FILE+'_subnetwork.txt')	
 	with open(args.RESULT_FILE+'_subnetwork.txt', 'w') as fout:
+		## header
 		fout.write('source\ttarget\n')
+		## body
 		for edge in subnetwork:
 			fout.write('%s\t%s\n' % edge)
-	with open(args.RESULT_FILE+'_accuracy.txt', 'w') as fout:
-		fout.write('AUC-ROC : %.3f\n' % mean_auc)
-		fout.write('Accuracy: %.3f\n' % mean_acc)	
+			
+	######## 5. 10 fold Cross Validation
+	if args.crossvalidation:
+		print('>>> 5. 10-fold Cross validation')	
+		mean_auc, mean_acc = compute_accuracy_via_crossvaldiation(data=data, labels=labels, network=network,
+																  K=10, random_state=0,
+																  dampingFactor=args.dampingFactor,
+																  n_biomarkers=args.numBiomarkers,
+																  n_clusters=args.numClusters,
+																  c_hubgene=args.conditionHubgene)
+		print('    AUC-ROC : %.3f' % mean_auc)
+		print('    Accuracy: %.3f' % mean_acc)
+		
+		print('    %s' % args.RESULT_FILE+'_accuracy.txt')	
+		with open(args.RESULT_FILE+'_accuracy.txt', 'w') as fout:
+			fout.write('AUC-ROC\t%.3f\n' % mean_auc)
+			fout.write('Accuracy\t%.3f\n' % mean_acc)	
 
 class CPR:
 	def __init__(self,
@@ -117,11 +135,14 @@ class CPR:
 		self.c_hubgene     = c_hubgene
 		self.logshow       = logshow
 		
-	def get_subnetwork(self):
-		return self.subnetwork
-		
 	def get_biomarkers(self):
 		return self.biomarkers
+		
+	def get_PRscores(self):
+		return self.PRscores
+		
+	def get_subnetwork(self):
+		return self.subnetwork
 		
 	def fit(self, expr, labels, genes, edges, random_state=None):
 		#### Set parameters
@@ -145,19 +166,22 @@ class CPR:
 				n_poors   = np.count_nonzero(labels[idx==i]==1)
 				print('        In cluster[%d], n_samples:%d, n_goods:%d, n_poors:%d' % (i, n_samples, n_goods, n_poors))
 			
-		
 		#### Adjacency Matrix
 		adjMat = self._make_adjacencyMatrix(edges,genes)
 		
 		#### Modified PageRank
 		if self.logshow:
 			print('    Modified PageRank')
-		geneScores = np.zeros(n_genes, dtype=np.float32)
+		PRScores = np.zeros([n_genes,self.n_clusters], dtype=np.float32)
 		for i in range(self.n_clusters):
 			tmp_expr   = expr[idx==i,:]
 			tmp_labels = labels[idx==i]
-			geneScores += self._conduct_modifiedPageRank(tmp_expr, tmp_labels, adjMat)
-		geneScores /= self.n_clusters
+			PRScores[:,i] += self._conduct_modifiedPageRank(tmp_expr, tmp_labels, adjMat)
+		geneScores    = PRScores.mean(axis=1)
+		
+		self.PRscores = list()
+		for gene, scores in zip(genes, PRScores.tolist()):
+			self.PRscores.append(tuple([gene]+scores))
 		
 		#### Degree in network
 		geneDegrees  = self._compute_geneDegree(adjMat)
@@ -302,14 +326,22 @@ class CPR:
 		return adjMat
 		
 	def _conduct_sampleClustering(self, expr, random_state):
-		## 1) PCA
+		## 1) zscoring genewise
+		expr_zscored = np.zeros(expr.shape)
+		for i in range(expr.shape[1]):
+			m = expr[:,i].mean()
+			s = expr[:,i].std()
+			if s > 0:
+				expr_zscored[:,i] = (expr[:,i] - m) / s
+	
+		## 2) PCA
 		pca = PCA(n_components=2, random_state=random_state)
-		expr_projected = pca.fit_transform(expr)
+		expr_projected = pca.fit_transform(expr_zscored)
 		
-		## 2) K-Means
+		## 3) K-Means
 		if self.n_clusters==0:
 			silhouetteScores = list()
-			for i in [2,3,4,5]:
+			for i in [2,3,4]:
 				kmeans = KMeans(n_clusters=i, random_state=random_state).fit(expr_projected)
 				score  = silhouette_score(expr_projected, kmeans.labels_, random_state=random_state)
 				silhouetteScores.append((i,score))
@@ -361,9 +393,10 @@ def compute_accuracy_via_crossvaldiation(data, labels, network, K, random_state,
 			probas_              = clf.predict_proba(expr_ranked[test])
 			fpr, tpr, thresholds = roc_curve(labels[test], probas_[:,1])
 			mean_tpr             += np.interp(mean_fpr, fpr, tpr)
-			## 7) print accuracy
+			## log
 			print('    %d%% complete!' % int(k/K*100))
 			k += 1
+		## 7) Average of AUC-ROC
 		mean_tpr /= K
 		mean_tpr[0] = 0.
 		mean_tpr[-1] = 1.
@@ -375,14 +408,15 @@ def compute_accuracy_via_crossvaldiation(data, labels, network, K, random_state,
 def parse_arguments():
 	parser=argparse.ArgumentParser(description="""CPR is a program to identify prognostic genes (biomarkers) and use them to predict prognosis of cancer patients.
 												Please refer to included 'manual.pdf'. For more detail, please refer to 'Improved prediction for breast cancer outcome by identifying heterogeneous biomarkers'.""")
-	parser.add_argument('EXPRESSION_FILE', type=str, help="Tab-delimited file for gene expression profiles")
-	parser.add_argument('NETWORK_FILE', type=str, help="Tab-delimited file for gene interaction network")
-	parser.add_argument('CLINICAL_FILE', type=str, help="Tab-delimited file for patient's clinical data. LABEL=1:poor prognosis and 0:good prognosis.")
-	parser.add_argument('RESULT_FILE', type=str, help="The results of CPR are saved with the following three names: 1) *_biomarker.txt, 2) *_subnetwork.txt, 3) *_accuracy.txt")
-	parser.add_argument('-m', '--numClusters', type=int, default=0, help="A parameter of K-means clustering algorithm. This parameter decides number of sample clusters to handle the heterogeneity of patients. The default value makes the number of clusters be determined by using the silhouette score. If a specific number is given, the K-means is carried out with the number. (default=0)")
+	parser.add_argument('EXPRESSION_FILE', type=str, help="Tab-delimited file for gene expression profiles.")
+	parser.add_argument('CLINICAL_FILE', type=str, help="Tab-delimited file for patient's clinical data. LABEL=0:good prognosis and 1:poor prognosis.")
+	parser.add_argument('NETWORK_FILE', type=str, help="Tab-delimited file for gene interaction network.")
+	parser.add_argument('RESULT_FILE', type=str, help="The results of CPR are saved with the following three names: 1) *_biomarker.txt, 2) *_subnetwork.txt, 3) *_score.txt")
+	parser.add_argument('-m', '--numClusters', type=int, default=0, help="A parameter of K-means clustering algorithm. This parameter decides number of sample clusters to handle the heterogeneity of patients. If the default value is given, the number of clusters is determined by the silhouette score. If a specific integer is given, the K-means clustering is conducted with the number. (default=0)")
 	parser.add_argument('-d', '--dampingFactor', type=float, default=0.7, help="A parameter of PageRank algorithm.This parameter decides an influence of network information on prediction. The value must be between 0.0 and 1.0. (default=0.7)")
 	parser.add_argument('-n', '--numBiomarkers', type=int, default=70, help="This parameter decides number of biomarkers to use in prediction. (default=70)")
 	parser.add_argument('-c', '--conditionHubgene', type=float, default=0.02, help="This parameter is used to identify a hub-gene. When c is a given parameter and x is the total of genes, we define top cx genes with high degree as hub-genes. (default=0.02)")
+	parser.add_argument('-v', '--crossvalidation', action='store_true', help="When this option is given, CPR.py will conduct 10-fold cross validation with the given data. The result of cross validation is provided in 4) *_accuracy.txt")
 	return parser.parse_args()
 
 def load_data(dataFile):
@@ -418,7 +452,6 @@ def load_network(dataFile):
 	RPL37A  RPS27A
 	MRPL1   MRPS36
 	RFC3    SPRTN
-	ZFP82   ZFP92
 	'''
 	with open(dataFile) as fin:
 		lines = fin.readlines()
@@ -442,7 +475,6 @@ def load_clinical(dataFile):
 	TCGA-AR-A24H    0
 	TCGA-AR-A24L    0
 	TCGA-AR-A24M    0
-	TCGA-AR-A24N    0
 	'''
 	with open(dataFile) as fin:
 		lines = fin.readlines()
@@ -461,7 +493,7 @@ def find_commonGeneList(X,Y):
 	Y=set(Y)
 	result = X.intersection(Y)
 	result = list(result)
-	result = sorted(result)  # sorted by gene symbol
+	result = sorted(result)  # sorted by gene symbol A->Z
 	return result
 	
 def make_gene2idx(geneList):
@@ -496,7 +528,7 @@ def map_labels(clinical,sampleList):
 	try:
 		result = list(map(lambda sample:clinical[sample], sampleList))
 	except:
-		print('ERROR: There is a mismatched sample between expression data and clinical data. Please make complete data')
+		print('ERROR: There is a mismatched sample between expression data and clinical data. Please check sample names')
 		exit(1)
 	return np.array(result)
 
