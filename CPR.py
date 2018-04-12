@@ -109,11 +109,11 @@ def main():
 	if args.crossvalidation:
 		print('>>> 5. 10-fold Cross validation')	
 		mean_auc, mean_acc = compute_accuracy_via_crossvaldiation(data=data, labels=labels, network=network,
-																  K=10, random_state=0,
-																  dampingFactor=args.dampingFactor,
-																  n_biomarkers=args.numBiomarkers,
-																  n_clusters=args.numClusters,
-																  c_hubgene=args.conditionHubgene)
+		                                                          K=10, random_state=0,
+		                                                          dampingFactor=args.dampingFactor,
+		                                                          n_biomarkers=args.numBiomarkers,
+		                                                          n_clusters=args.numClusters,
+		                                                          c_hubgene=args.conditionHubgene)
 		print('    AUC-ROC : %.3f' % mean_auc)
 		print('    Accuracy: %.3f' % mean_acc)
 		
@@ -368,14 +368,14 @@ def compute_accuracy_via_crossvaldiation(data, labels, network, K, random_state,
 		for train, test in cv.split(data['expr'], labels):
 			## 1) gene selection
 			cpr = CPR(dampingFactor=dampingFactor,
-					  n_biomarkers=n_biomarkers,
-					  n_clusters=n_clusters,
-					  c_hubgene=c_hubgene)
+			          n_biomarkers=n_biomarkers,
+			          n_clusters=n_clusters,
+			          c_hubgene=c_hubgene)
 			cpr.fit(expr=data['expr'][train],
-					labels=labels[train],
-					genes=data['gene'],
-					edges=network['edge'],
-					random_state=1)
+			        labels=labels[train],
+			        genes=data['gene'],
+			        edges=network['edge'],
+			        random_state=1)
 			biomarkers = cpr.get_biomarkers()
 			## 2) Restrict data
 			biomarkerList   = list(map(lambda elem:elem[0], biomarkers))
@@ -407,7 +407,7 @@ def compute_accuracy_via_crossvaldiation(data, labels, network, K, random_state,
 		
 def parse_arguments():
 	parser=argparse.ArgumentParser(description="""CPR is a program to identify prognostic genes (biomarkers) and use them to predict prognosis of cancer patients.
-												Please refer to included 'manual.pdf'. For more detail, please refer to 'Improved prediction for breast cancer outcome by identifying heterogeneous biomarkers'.""")
+	                                              Please refer to included 'manual.pdf'. For more detail, please refer to 'Improved prediction for breast cancer outcome by identifying heterogeneous biomarkers'.""")
 	parser.add_argument('EXPRESSION_FILE', type=str, help="Tab-delimited file for gene expression profiles.")
 	parser.add_argument('CLINICAL_FILE', type=str, help="Tab-delimited file for patient's clinical data. LABEL=0:good prognosis and 1:poor prognosis.")
 	parser.add_argument('NETWORK_FILE', type=str, help="Tab-delimited file for gene interaction network.")
@@ -442,8 +442,8 @@ def load_data(dataFile):
 	expr = np.array(expr, dtype=np.float32).T  # genewise-->samplewise
 	## maek result
 	result = {'sample':sample,
-		      'expr':expr,
-		      'gene':gene}
+	          'expr':expr,
+	          'gene':gene}
 	return result
 	
 def load_network(dataFile):
@@ -466,7 +466,7 @@ def load_network(dataFile):
 		geneSet.add(edge[1])
 	## make result
 	result = {'edge':edgeList,
-		      'gene':geneSet}
+	          'gene':geneSet}
 	return result
 	
 def load_clinical(dataFile):
