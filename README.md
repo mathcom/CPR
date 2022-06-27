@@ -8,6 +8,15 @@ For more detail, please refer to Choi, Jonghwan, et al. "Improved prediction of 
 
 - Latest update: 27 June 2022
 
+--------------------------------------------------------------------------------------------
+## Installation: 
+- We recommend to install via Anaconda (https://www.anaconda.com/)
+- After installing Anaconda, please create a conda environment with the following commands:
+```
+git clone https://github.com/mathcom/CPR.git
+cd CPR
+conda env create -f environment.yml
+```
 
 --------------------------------------------------------------------------------------------
 ## Usage: 
@@ -18,7 +27,9 @@ python CPR.py EXPRESSION_FILE CLINICAL_FILE NETWORK_FILE RESULT_FILE [optional p
 --------------------------------------------------------------------------------------------
 ## Example:
 ```
-$ python CPR.py ex_EXPRESSION.txt ex_CLINICAL ex_NETWORK.txt ex_RESULT
+python CPR.py ex_EXPRESSION.txt ex_CLINICAL.txt ex_NETWORK.txt ex_RESULT
+```
+```
 >>> 0. Arguments
 Namespace(CLINICAL_FILE='ex_CLINICAL.txt', EXPRESSION_FILE='ex_EXPRESSION.txt', NETWORK_FILE='ex_NETWORK.txt', RESULT_FILE='ex_RESULT', conditionHubgene=0.02, crossvalidation=False, dampingFactor=0.7, numBiomarkers=70, numClusters=0)
 >>> 1. Load data
