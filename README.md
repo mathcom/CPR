@@ -27,11 +27,12 @@ python CPR.py EXPRESSION_FILE CLINICAL_FILE NETWORK_FILE RESULT_FILE [optional p
 --------------------------------------------------------------------------------------------
 ## Example:
 ```
-python CPR.py ex_EXPRESSION.txt ex_CLINICAL.txt ex_NETWORK.txt ex_RESULT
+mkdir results
+python CPR.py data/ex_EXPRESSION.txt data/ex_CLINICAL.txt data/ex_NETWORK.txt results/ex_RESULT
 ```
 ```
 >>> 0. Arguments
-Namespace(CLINICAL_FILE='ex_CLINICAL.txt', EXPRESSION_FILE='ex_EXPRESSION.txt', NETWORK_FILE='ex_NETWORK.txt', RESULT_FILE='ex_RESULT', conditionHubgene=0.02, crossvalidation=False, dampingFactor=0.7, numBiomarkers=70, numClusters=0)
+Namespace(EXPRESSION_FILE='data/ex_EXPRESSION.txt', CLINICAL_FILE='data/ex_CLINICAL.txt', NETWORK_FILE='data/ex_NETWORK.txt', RESULT_FILE='results/ex_RESULT', numClusters=0, dampingFactor=0.7, numBiomarkers=70, conditionHubgene=0.02, crossvalidation=False)
 >>> 1. Load data
 >>> 2. Preprocess data
 	n_samples: 189
@@ -44,9 +45,9 @@ Namespace(CLINICAL_FILE='ex_CLINICAL.txt', EXPRESSION_FILE='ex_EXPRESSION.txt', 
 		In cluster[1], n_samples:104, n_goods:48, n_poors:56
 	Modified PageRank
 >>> 4. Save results
-	ex_RESULT_biomarker.txt
-	ex_RESULT_score.txt
-	ex_RESULT_subnetwork.txt
+	results/ex_RESULT_biomarker.txt
+	results/ex_RESULT_score.txt
+	results/ex_RESULT_subnetwork.txt
 $
 ```
 	
