@@ -1,20 +1,22 @@
-CPR is a program to identify prognostic genes (biomarkers) and use them to predict prognosis of cancer patients.
+# Improved prediction of breast cancer outcome by identifying heterogeneous biomarkers
+
+CPR (clustering and pagerank) is a program to identify prognostic genes (biomarkers) and use them to predict prognosis of cancer patients.
 
 Please refer to included 'manual.pdf'.
 
 For more detail, please refer to Choi, Jonghwan, et al. "Improved prediction of breast cancer outcome by identifying heterogeneous biomarkers." Bioinformatics 33.22 (2017): 3619-3626.
 
-Latest update: 27 June 2022
+- Latest update: 27 June 2022
 
 
 --------------------------------------------------------------------------------------------
-USAGE: 
+## Usage: 
 ```
 python CPR.py EXPRESSION_FILE CLINICAL_FILE NETWORK_FILE RESULT_FILE [optional parameters]
 ```
 	
 --------------------------------------------------------------------------------------------
-example:
+## Example:
 ```
 $ python CPR.py ex_EXPRESSION.txt ex_CLINICAL ex_NETWORK.txt ex_RESULT
 >>> 0. Arguments
@@ -38,8 +40,8 @@ $
 ```
 	
 --------------------------------------------------------------------------------------------
-Note:
-The option parameter '-h' shows help message.
+## Note:
+- The option parameter '-h' shows help message.
 ```
 $ python CPR.py -h
 ```	
